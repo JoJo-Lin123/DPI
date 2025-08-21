@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KPI 填報與視覺化總表（本機版）</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #1e88e5;      /* 使用者主色（藍） */
+      --primary-600: #1565c0;
+      --border: #e5e7eb;
+
+      /* 提示色（柔和） */
+      --row-amber: #fffbeb;    /* 未開始（目前未上色用） */
+      --row-blue:  #e8f4fd;    /* 進行中 */
+      --row-green: #e6f4ea;    /* 已完成（清新） */
+
+      --ok: #10b981;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+
+      --chip: #e3f2fd;
+      --banner-bg: linear-gradient(90deg,#e0f2fe, #f0f9ff);
+      --banner-fg: #075985;
+    }
+    /* 管理者主題：藍紫色系（較淡） */
+    body[data-role="admin"]{
+      --primary:#818cf8;       /* indigo-400 */
+      --primary-600:#6366f1;   /* indigo-500 */
+      --bg:#eef2ff;            /* indigo-50 */
+      --banner-bg: linear-gradient(90deg,#e0e7ff,#f3e8ff);
+      --banner-fg:#3730a3;     /* indigo-800 */
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Noto Sans TC", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background: var(--bg); color: var(--text); line-height: 1.6; transition: background .25s ease; }
+    .wrap { max-width: 1220px; margin: 24px auto; padding: 0 16px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+    h1 { font-size: 24px; margin: 0; color: var(--primary); transition: color .25s ease; }
+    .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+
+    /* ===== 按鈕系統（無陰影、無外框；以柔和邊線/單色為主） ===== */
+    .btn,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-outline,
+    .btn-danger,
+    .btn-login{
+      border-radius:10px;
+      padding:10px 14px;
+      font-weight:600;
+      border:1px solid transparent;
+      cursor:pointer;
+      outline:none;
+      box-shadow:none;
+      transition: background .2s ease, color .2s ease, transform .05s ease, opacity .2s ease, filter .2s ease, border-color .2s ease;
+    }
+    .btn:focus,.btn-secondary:focus,.btn-ghost:focus,.btn-outline:focus,.btn-danger:focus,.btn-login:focus,
+    .btn:focus-visible,.btn-secondary:focus-visible,.btn-ghost:focus-visible,.btn-outline:focus-visible,.btn-danger:focus-visible,.btn-login:focus-visible{ outline:none; box-shadow:none; }
+
+    .btn { background: var(--primary); color:#fff; }
+    .btn:hover{ background: var(--primary-600); }
+    .btn:active{ transform: translateY(1px); }
+
+    .btn-secondary{ background:#eef2ff; color:#4f46e5; }
+    .btn-secondary:hover{ filter: brightness(.96); }
+
+    .btn-ghost{ background:#ffffff; color:#374151; border:1px solid var(--border); }
+    .btn-ghost:hover{ filter: brightness(.98); }
+
+    .btn-outline{
+      background:#fff; color:#4f46e5;
+      border:1px solid #c7d2fe;
+    }
+    .btn-outline:hover{ border-color:#a78bfa; }
+
+    .btn-danger{ background: #ef5350; color:#fff; }
+    .btn-danger:hover{ background:#d32f2f; }
+
+    .btn-login{
+      border-radius:999px;
+      padding:8px 14px;
+      font-weight:800;
+      background:
+        linear-gradient(#fff,#fff) padding-box,
+        linear-gradient(90deg,#93c5fd,#c4b5fd) border-box;
+      color:#334155;
+      border:1px solid transparent;
+    }
+    .btn-login:hover{ filter: brightness(.98); }
+    .btn-login:active{ transform: translateY(0); }
+    body[data-role="admin"] .btn-login{
+      background: linear-gradient(90deg,#818cf8,#a78bfa); color:#fff;
+    }
+
+    /* 表格內小按鈕（與 btn-outline 同風格；無陰影） */
+    .btn-s{ height:32px; padding:0 10px; font-size:12px; border-radius:10px; border:1px solid transparent; outline:none; box-shadow:none; }
+    .btn-edit{
+      background:#fff; color: var(--primary);
+      border:1px solid #c7d2fe;      /* 淡藍邊線 */
+    }
+    .btn-edit:hover{
+      color: var(--primary-600);
+      border-color:#a78bfa;
+      background:#fff;
+    }
+    .btn-delete{
+      background:#fff; color:#c2185b;  /* 清新莓粉 */
+      border:1px solid #f8bbd0;       /* 淡粉邊線 */
+    }
+    .btn-delete:hover{
+      color:#ad1457;
+      border-color:#f48fb1;
+      background:#fff;
+    }
+
+    .grid { display:grid; grid-template-columns: 1fr; gap:16px; }
+    @media (min-width: 1080px){ .grid-3 { grid-template-columns: 1.1fr 1fr 1fr; } .grid-2 { grid-template-columns: 1.1fr 1fr; } }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; }
+    .card h2 { margin: 0 0 12px; font-size:18px; color:#111827; }
+    label { display:block; font-weight:600; margin:10px 0 6px; }
+    input, select, textarea { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:15px; background:#fff; }
+    .row { display:grid; grid-template-columns: 1fr; gap:12px; }
+    @media (min-width: 720px){ .row-2 { grid-template-columns: 1fr 1fr; } .row-3 { grid-template-columns: 1fr 1fr 1fr; } }
+    .hint { color: var(--muted); font-size: 13px; }
+    .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+    .chip { background:var(--chip); color:#0f4c81; border-radius:999px; padding:4px 10px; font-size:12px; border:1px solid #bbdefb; }
+
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:10px 8px; border-bottom: 1px solid var(--border); text-align:center; }
+    thead th { background:#f8fafc; font-size:13px; color:#374151; font-weight:600; }
+    tbody td { font-size:14px; font-weight:400; } /* 明細：字級較大、不加粗 */
+    tbody tr:not([data-stage]):hover { background:#f9fafb; }
+    tfoot td { background:#f8fafc; font-weight:700; }
+
+    .tag { padding:4px 8px; border-radius:8px; font-weight:600; font-size:12px; }
+    .tag.ok{ background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; }
+    .tag.warn{ background:#fffbeb; color:#92400e; border:1px solid #fde68a; }
+    .tag.bad{ background:#fef2f2; color:#991b1b; border:1px solid #fecaca; }
+
+    .actions { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+    .tiny { font-size:12px; color:var(--muted); }
+    .footer { margin-top:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .input-inline { display:flex; gap:8px; align-items:center; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:#f3f4f6; border:1px solid var(--border); border-radius:999px; }
+    .switch { display:inline-flex; align-items:center; gap:8px; user-select:none; }
+    .switch label{ font-size:14px; font-weight:500; white-space:nowrap; }
+
+    .scroll-area{
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .scroll-area table{ margin: 0; border-collapse: separate; border-spacing: 0; }
+    .scroll-area thead th{
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f8fafc;
+      box-shadow: 0 1px 0 var(--border);
+    }
+
+    #chips { display: none; }
+
+    /* ===== 角色顯示/權限 ===== */
+    body[data-role="user"] [data-admin-action] { display: none !important; }
+    body[data-role="user"] button[data-id] { display:none !important; }
+    body[data-role="user"] #threshold { opacity:.6; pointer-events:none; }
+    body[data-role="user"] [data-admin-section] { display:none !important; }
+
+    .login-pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:#eef2ff; border:1px solid var(--primary); color:var(--primary-600); border-radius:999px; transition: all .25s ease; }
+    body[data-role="admin"] .login-pill{ background:linear-gradient(90deg,#e0e7ff,#f3e8ff); color:#3730a3; border-color:#a78bfa; }
+
+    .role-banner { display:none; position:sticky; top:0; z-index:50; padding:8px 16px; text-align:center; font-weight:800; letter-spacing:.5px; background: var(--banner-bg); color: var(--banner-fg); border-bottom:1px solid var(--border); }
+    body[data-role="admin"] .role-banner{ display:block; }
+
+    /* ===== Modal ===== */
+    .kpi-modal.hidden { display:none; }
+    .kpi-modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.35); z-index:9999; padding:16px; }
+    .kpi-modal .panel { background:#fff; border:1px solid var(--border); border-radius:16px; padding:20px; width:min(520px,92vw); }
+    .kpi-modal h3{ margin:0 0 14px; font-size:20px; color:#111827; }
+    .kpi-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+    .seg { display:flex; gap:6px; background:#f3f4f6; padding:6px; border-radius:12px; }
+    .seg label{ flex:1; position:relative; }
+    .seg input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .seg .opt{ display:flex; align-items:center; justify-content:center; gap:8px; padding:10px; border-radius:10px; font-weight:800; color:#374151; border:1px solid transparent; transition: all .15s; }
+    .seg input:checked + .opt{ background:#fff; border-color:var(--primary); color:var(--primary-600); }
+
+    /* ===== 紀錄明細：依進度整列上色（柔和 & 不加粗） ===== */
+    tbody tr[data-stage="NOT_STARTED"] { background-color: transparent; color: inherit; }
+    tbody tr[data-stage="IN_PROGRESS"] { background-color: var(--row-blue);  color: #1565c0; font-weight: 400; }
+    tbody tr[data-stage="DONE"]        { background-color: var(--row-green); color: #2e7d32; font-weight: 400; }
+    tbody tr[data-stage]:hover { filter: brightness(0.985); }
+
+    /* ===== 圓餅圖縮小約 85% ===== */
+    #chartByTask{ display:block; margin:0 auto; transform: scale(0.85); transform-origin: top center; }
+  </style>
+</head>
+<body>
+  <div class="role-banner">目前為「管理者模式」</div>
+
+  <div class="wrap">
+    <header>
+      <h1>KPI 填報與視覺化總表</h1>
+      <div class="toolbar">
+        <span id="roleBadge" class="login-pill">角色：使用者</span>
+        <button class="btn-login" id="loginBtn">🔐 登入</button>
+        <button class="btn" id="exportCsv" data-admin-action>匯出 CSV</button>
+        <button class="btn-danger" id="clearAll" data-admin-action>清除全部資料</button>
+      </div>
+    </header>
+
+    <!-- 新增紀錄 -->
+    <section class="card" style="margin-bottom:16px;">
+      <h2>新增紀錄</h2>
+      <form id="form">
+        <div class="row row-2">
+          <div>
+            <label>單號</label>
+            <input type="text" id="orderNo" required placeholder="請輸入單號" />
+          </div>
+          <div>
+            <label>日期</label>
+            <input type="date" id="date" required />
+          </div>
+        </div>
+
+        <div class="row row-2">
+          <div>
+            <label>姓名</label>
+            <input type="text" id="name" list="empList" placeholder="例如：員工A" required />
+            <datalist id="empList"></datalist>
+          </div>
+          <div>
+            <label>任務類型</label>
+            <select id="task" required></select>
+            <div id="chips" class="chips"></div>
+          </div>
+        </div>
+
+        <div class="row row-3">
+          <div>
+            <label>件數</label>
+            <input type="number" id="qty" min="1" value="1" required />
+          </div>
+          <div>
+            <label>自動得分</label>
+            <input type="text" id="autoScore" readonly placeholder="系統計算" />
+          </div>
+          <div>
+            <label>備註</label>
+            <input type="text" id="note" placeholder="可留空" />
+          </div>
+        </div>
+
+        <!-- 進度三階段（允許任意選擇） -->
+        <div class="row row-2">
+          <div>
+            <label>進度</label>
+            <select id="stage" required>
+              <option value="NOT_STARTED">未開始（0%）</option>
+              <option value="IN_PROGRESS">進行中（50%）</option>
+              <option value="DONE">已完成（100%）</option>
+            </select>
+            <div class="tiny">可直接選擇任何階段（例如事後一次填寫已完成）。</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <div class="tiny">KPI% 以「任務分數自動正規化（總和=100）」計算；個人目標亦換算為百分比（未設定者視為 100%）。</div>
+          <button class="btn" type="submit">儲存紀錄</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 視覺化 + 每月總表 -->
+    <div class="grid grid-2">
+      <section class="card">
+        <h2>視覺化總覽</h2>
+        <div class="row row-2" style="margin-bottom:8px;">
+          <div class="input-inline">
+            <label for="month">月份</label>
+            <input type="month" id="month" />
+          </div>
+          <div class="input-inline">
+            <label for="filterName">姓名</label>
+            <input type="text" id="filterName" placeholder="篩選姓名（可留空）" />
+          </div>
+        </div>
+        <canvas id="chartByPerson" height="140"></canvas>
+        <canvas id="chartByTask" height="140"></canvas>
+      </section>
+
+      <section class="card">
+        <h2>每月總表（依人彙總）與設定</h2>
+        <div class="row row-2">
+          <div>
+            <label>達標門檻（%）</label>
+            <input type="number" id="threshold" min="0" max="100" step="1" />
+            <div class="tiny">優秀 ≥ 門檻×1.333；達標 ≥ 門檻；其餘未達標。</div>
+          </div>
+          <div>
+            <label>快速操作</label>
+            <div class="pill"><span>當前月份：</span><span id="pillMonth">—</span></div>
+            <div class="switch" style="margin-top:8px;">
+              <input type="checkbox" id="onlyUnder" />
+              <label for="onlyUnder">只顯示未達標</label>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <table>
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>完成率</th>
+                <th>狀態</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-under"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- 任務管理（僅管理者） -->
+    <section class="card" style="margin-top:16px;" data-admin-section>
+      <h2>任務類型管理</h2>
+      <div class="row row-3">
+        <div>
+          <label>任務名稱</label>
+          <input type="text" id="mTaskName" placeholder="例如：影片剪輯" />
+        </div>
+        <div>
+          <label>單件分數</label>
+          <input type="number" id="mTaskScore" min="0" step="1" placeholder="例如：30" />
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:8px;">
+          <button class="btn" id="addTask" data-admin-action>新增 / 更新任務</button>
+          <button class="btn-outline" id="resetDefaults" data-admin-action>恢復預設任務</button>
+        </div>
+      </div>
+      <div class="scroll-area" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>任務</th><th>分數</th><th>操作</th></tr></thead>
+          <tbody id="tbody-tasks"></tbody>
+        </table>
+      </div>
+      <div class="tiny" style="margin-top:8px;">正規化僅用於 KPI 計算；圖表與明細仍顯示原始分。</div>
+    </section>
+
+    <!-- 員工目標設定（僅管理者） -->
+    <section class="card" style="margin-top:16px;" data-admin-section>
+      <h2>員工目標設定（每月目標分）</h2>
+      <div class="row row-3">
+        <div>
+          <label>員工姓名</label>
+          <input type="text" id="tName" list="empList" placeholder="輸入或選擇既有姓名" />
+        </div>
+        <div>
+          <label>每月目標分</label>
+          <input type="number" id="tPoints" min="0" step="1" placeholder="例如：300" />
+        </div>
+        <div>
+          <label>角色說明（選填）</label>
+          <input type="text" id="tNote" placeholder="例如：剪輯主力、件數少難度高" />
+        </div>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" id="saveTarget" data-admin-action>儲存 / 更新目標</button>
+        <button class="btn-delete btn-s" id="deleteTarget" data-admin-action>刪除該員工目標</button>
+      </div>
+      <div class="scroll-area" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>姓名</th><th>目標分</th><th>角色說明</th><th>操作</th></tr></thead>
+          <tbody id="tbody-targets"></tbody>
+        </table>
+      </div>
+      <div class="tiny" style="margin-top:8px;">未設定者之「目標%」= 100%（等於以任務分總和作為目標）。</div>
+    </section>
+
+    <!-- 員工管理（僅管理者） -->
+    <section class="card" style="margin-top:16px;" data-admin-section>
+      <h2>員工管理</h2>
+      <div class="row row-2">
+        <div>
+          <label>員工姓名</label>
+          <input type="text" id="mEmpName" placeholder="例如：員工A" />
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:8px;">
+          <button class="btn" id="addEmp" data-admin-action>新增 / 更新員工</button>
+          <button class="btn-outline" id="clearEmp" data-admin-action>清空名單</button>
+        </div>
+      </div>
+      <div class="scroll-area" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>姓名</th><th>操作</th></tr></thead>
+          <tbody id="tbody-emp"></tbody>
+        </table>
+      </div>
+      <div class="tiny">填報表單的「姓名」欄會顯示此名單做為自動完成建議。</div>
+    </section>
+
+    <!-- 紀錄明細 -->
+    <section class="card" style="margin-top:16px;">
+      <h2>紀錄明細</h2>
+      <table>
+        <thead id="thead-records">
+          <tr>
+            <th>單號</th>
+            <th>日期</th>
+            <th>姓名</th>
+            <th>任務</th>
+            <th>件數</th>
+            <th>單件分</th>
+            <th>總分</th>
+            <th>進度</th>
+            <th>備註</th>
+            <th data-admin-action>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+      <!-- 分頁控制 -->
+      <div id="pager" style="display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:8px;">
+        <button id="prevPage" class="btn-outline btn-s">上一頁</button>
+        <span id="pageInfo" class="tiny">第 1 / 1 頁</span>
+        <button id="nextPage" class="btn-outline btn-s">下一頁</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- 登入 Modal -->
+  <div id="kpi-login-modal" class="kpi-modal hidden" aria-hidden="true">
+    <div class="panel" role="dialog" aria-modal="true" aria-label="登入">
+      <h3>登入</h3>
+      <div class="seg" role="radiogroup" aria-label="選擇角色">
+        <label>
+          <input type="radio" name="kpi-role" value="user" checked />
+          <div class="opt">👤 使用者</div>
+        </label>
+        <label>
+          <input type="radio" name="kpi-role" value="admin" />
+          <div class="opt">🛠️ 管理者</div>
+        </label>
+      </div>
+      <div class="kpi-row" id="kpi-pass-row" style="display:none;">
+        <input id="kpi-admin-pass" type="password" placeholder="管理者密碼（預設：123）" />
+      </div>
+      <div class="tiny" style="margin-top:4px;">管理者擁有：任務／員工／目標維護、編輯/刪除紀錄、匯出與清除資料等權限。</div>
+      <div class="kpi-actions">
+        <button id="kpi-cancel" class="btn-ghost">取消</button>
+        <button id="kpi-confirm" class="btn">登入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 編輯紀錄 Modal（管理者） -->
+  <div id="edit-modal" class="kpi-modal hidden" aria-hidden="true">
+    <div class="panel" role="dialog" aria-modal="true" aria-label="編輯紀錄">
+      <h3>編輯紀錄</h3>
+      <form id="edit-form">
+        <input type="hidden" id="edit-id" />
+        <div class="row row-2">
+          <div>
+            <label>單號</label>
+            <input type="text" id="edit-orderNo" required />
+          </div>
+          <div>
+            <label>日期</label>
+            <input type="date" id="edit-date" required />
+          </div>
+        </div>
+        <div class="row row-2">
+          <div>
+            <label>姓名</label>
+            <input type="text" id="edit-name" list="empList" required />
+          </div>
+          <div>
+            <label>任務類型</label>
+            <select id="edit-task" required></select>
+          </div>
+        </div>
+        <div class="row row-3">
+          <div>
+            <label>件數</label>
+            <input type="number" id="edit-qty" min="1" required />
+          </div>
+          <div>
+            <label>單件分（依任務）</label>
+            <input type="text" id="edit-scorePerItem" readonly />
+          </div>
+          <div>
+            <label>備註</label>
+            <input type="text" id="edit-note" />
+          </div>
+        </div>
+        <!-- 編輯進度（允許任意切換） -->
+        <div class="row row-2">
+          <div>
+            <label>進度</label>
+            <select id="edit-stage" required>
+              <option value="NOT_STARTED">未開始（0%）</option>
+              <option value="IN_PROGRESS">進行中（50%）</option>
+              <option value="DONE">已完成（100%）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="kpi-actions">
+          <button type="button" id="edit-cancel" class="btn-ghost">取消</button>
+          <button type="submit" class="btn">儲存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ===== keys =====
+    const KEY = "kpiRecords_v1";
+    const TASKS_KEY = "kpiTasks_v1";
+    const THRESHOLD_KEY = "kpiThreshold_v1";
+    const EMP_KEY = "kpiEmployees_v1";
+    const TARGETS_KEY = "kpiTargets_v1";
+
+    // 進度常數
+    const STAGE = {
+      NOT_STARTED: { idx: 0, pct: 0,   label: '未開始' },
+      IN_PROGRESS: { idx: 1, pct: 50,  label: '進行中' },
+      DONE:        { idx: 2, pct: 100, label: '已完成' }
+    };
+
+    // 預設
+    const DEFAULT_TASKS = {
+      "影片剪輯": 30, "海報設計": 10, "衛教單張": 5,
+      "Podcast錄音剪輯": 20, "網頁維護": 10, "會議室管理": 5, "拍照/拍攝支援": 15
+    };
+    const DEFAULT_EMPS = ["員工A","員工B","員工C"];
+
+    // DOM
+    const form = document.getElementById('form');
+    const orderNoEl = document.getElementById('orderNo');
+    const dateEl = document.getElementById('date');
+    const nameEl = document.getElementById('name');
+    const taskEl = document.getElementById('task');
+    const qtyEl = document.getElementById('qty');
+    const noteEl = document.getElementById('note');
+    const autoScoreEl = document.getElementById('autoScore');
+    const stageEl = document.getElementById('stage');
+
+    const tbody = document.getElementById('tbody');
+    const tfoot = document.getElementById('tfoot');
+    const theadRecords = document.getElementById('thead-records');
+    const monthEl = document.getElementById('month');
+    const filterNameEl = document.getElementById('filterName');
+    const chips = document.getElementById('chips');
+
+    // 每月總表
+    const thresholdEl = document.getElementById('threshold');
+    const tbodyUnder = document.getElementById('tbody-under');
+    const pillMonth = document.getElementById('pillMonth');
+    const onlyUnderEl = document.getElementById('onlyUnder');
+
+    // 任務管理
+    const mTaskName = document.getElementById('mTaskName');
+    const mTaskScore = document.getElementById('mTaskScore');
+    const addTaskBtn = document.getElementById('addTask');
+    const resetDefaultsBtn = document.getElementById('resetDefaults');
+    const tbodyTasks = document.getElementById('tbody-tasks');
+
+    // 員工管理
+    const mEmpName = document.getElementById('mEmpName');
+    const addEmpBtn = document.getElementById('addEmp');
+    const clearEmpBtn = document.getElementById('clearEmp');
+    const tbodyEmp = document.getElementById('tbody-emp');
+    const empList = document.getElementById('empList');
+
+    // 目標設定
+    const tName = document.getElementById('tName');
+    const tPoints = document.getElementById('tPoints');
+    const tNote = document.getElementById('tNote');
+    const tbodyTargets = document.getElementById('tbody-targets');
+
+    // 登入/角色
+    const ADMIN_PASS = '123'; // ← 變更密碼
+    const ROLE_KEY = 'kpi_role_v2';
+    const roleBadge = document.getElementById('roleBadge');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginModal = document.getElementById('kpi-login-modal');
+    const passRow = document.getElementById('kpi-pass-row');
+    const passInput = document.getElementById('kpi-admin-pass');
+    const modalCancel = document.getElementById('kpi-cancel');
+    const modalConfirm = document.getElementById('kpi-confirm');
+    const $$ = (sel)=>Array.from(document.querySelectorAll(sel));
+
+    // 編輯紀錄 Modal
+    const editModal = document.getElementById('edit-modal');
+    const editForm = document.getElementById('edit-form');
+    const editId = document.getElementById('edit-id');
+    const editOrderNo = document.getElementById('edit-orderNo');
+    const editDate = document.getElementById('edit-date');
+    const editName = document.getElementById('edit-name');
+    const editTask = document.getElementById('edit-task');
+    const editQty = document.getElementById('edit-qty');
+    const editScorePerItem = document.getElementById('edit-scorePerItem');
+    const editNote = document.getElementById('edit-note');
+    const editStage = document.getElementById('edit-stage');
+    const editCancel = document.getElementById('edit-cancel');
+
+    // 分頁
+    const PAGE_SIZE = 20;
+    let currentPage = 1;
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    const pageInfoEl = document.getElementById('pageInfo');
+
+    // 工具
+    const read = (k, fb) => { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } };
+    const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+    const load = ()=> read(KEY, []);
+    const save = list => write(KEY, list);
+
+    // 初始化
+    function ensureInit(){
+      if(!read(TASKS_KEY)) write(TASKS_KEY, DEFAULT_TASKS);
+      if(read(THRESHOLD_KEY) == null) write(THRESHOLD_KEY, 80);
+      if(!Array.isArray(read(EMP_KEY))) write(EMP_KEY, DEFAULT_EMPS);
+      if(!read(TARGETS_KEY)) write(TARGETS_KEY, {});
+    }
+    ensureInit();
+
+    // 初值
+    dateEl.valueAsDate = new Date();
+    monthEl.value = new Date().toISOString().slice(0,7);
+    thresholdEl.value = read(THRESHOLD_KEY, 80);
+    pillMonth.textContent = monthEl.value;
+    stageEl.value = 'NOT_STARTED';
+
+    // ===== 角色 =====
+    function getRole(){ return sessionStorage.getItem(ROLE_KEY) || 'user'; }
+    function isAdmin(){ return getRole()==='admin'; }
+    function applyRoleGate(){ thresholdEl.disabled = !isAdmin(); }
+    function renderRecordsHead(){
+      if(!theadRecords) return;
+      theadRecords.innerHTML = `
+        <tr>
+          <th>單號</th>
+          <th>日期</th>
+          <th>姓名</th>
+          <th>任務</th>
+          <th>件數</th>
+          <th>單件分</th>
+          <th>總分</th>
+          <th>進度</th>
+          <th>備註</th>
+          ${isAdmin() ? '<th>操作</th>' : ''}
+        </tr>`;
+    }
+    function setRole(role){
+      sessionStorage.setItem(ROLE_KEY, role);
+      document.body.setAttribute('data-role', role);
+      roleBadge.textContent = '角色：' + (role==='admin'?'管理者':'使用者');
+      loginBtn.innerHTML = (role==='admin' ? '🚪 登出' : '🔐 登入');
+      applyRoleGate(); renderRecordsHead(); currentPage = 1; render();
+    }
+
+    // 登入 UI
+    function openLogin(){
+      loginModal.classList.remove('hidden'); loginModal.setAttribute('aria-hidden','false');
+      const current = getRole();
+      $$('input[name="kpi-role"]').forEach(r=> r.checked = (r.value===current) );
+      passRow.style.display = (current==='admin') ? 'block' : 'none';
+      if (current==='admin') passInput.focus();
+    }
+    function closeLogin(){ loginModal.classList.add('hidden'); loginModal.setAttribute('aria-hidden','true'); passInput.value=''; }
+    $$('input[name="kpi-role"]').forEach(r=>{
+      r.addEventListener('change', ()=>{
+        passRow.style.display = (r.value==='admin')?'block':'none';
+        if(r.value==='admin') passInput.focus();
+      });
+    });
+    loginBtn.addEventListener('click', ()=>{
+      if(isAdmin()){ setRole('user'); return; }
+      openLogin();
+    });
+    modalCancel.addEventListener('click', closeLogin);
+    loginModal.addEventListener('click', (e)=>{ if(e.target===loginModal) closeLogin(); });
+    modalConfirm.addEventListener('click', ()=>{
+      const picked = ($$('input[name="kpi-role"]').find(x=>x.checked)||{}).value || 'user';
+      if(picked==='admin' && passInput.value!==ADMIN_PASS){ alert('管理者密碼錯誤'); return; }
+      setRole(picked); closeLogin();
+    });
+
+    // 自動得分
+    function updateAutoScore(){
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      const s = tasks[taskEl.value] || 0;
+      const q = Number(qtyEl.value || 0);
+      autoScoreEl.value = (s && q) ? (s*q) : '';
+    }
+    taskEl.addEventListener('change', updateAutoScore);
+    qtyEl.addEventListener('input', updateAutoScore);
+
+    // 任務 UI
+    let editingTaskKey = null;
+    function resetTaskEditState(){
+      editingTaskKey = null;
+      if(mTaskName) mTaskName.value = '';
+      if(mTaskScore) mTaskScore.value = '';
+      if(addTaskBtn){ addTaskBtn.textContent = '新增 / 更新任務'; delete addTaskBtn.dataset.mode; }
+    }
+    function rebuildTaskUI(){
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      taskEl.innerHTML = '<option value="" disabled selected>請選擇</option>' +
+        Object.entries(tasks).map(([k,v])=>`<option value="${k}">${k}</option>`).join('');
+      const editTaskEl = document.getElementById('edit-task');
+      if (editTaskEl){
+        editTaskEl.innerHTML = '<option value="" disabled selected>請選擇</option>' +
+          Object.entries(tasks).map(([k,v])=>`<option value="${k}">${k}</option>`).join('');
+      }
+      chips.innerHTML = Object.entries(tasks).map(([k,v])=>`<span class="chip">${k} ${v}</span>`).join('');
+      if(tbodyTasks){
+        tbodyTasks.innerHTML = Object.entries(tasks).map(([k,v])=>`
+          <tr>
+            <td>${k}</td>
+            <td>${v}</td>
+            <td class="actions">
+              <button class="btn-edit btn-s" data-edit="${k}" data-admin-action>編輯</button>
+              <button class="btn-delete btn-s" data-del="${k}" data-admin-action>刪除</button>
+            </td>
+          </tr>`).join('');
+        tbodyTasks.querySelectorAll('button[data-edit]').forEach(b=>{
+          b.addEventListener('click',()=>{
+            if(!isAdmin()){ alert('請先登入管理者'); return; }
+            const t = read(TASKS_KEY, DEFAULT_TASKS);
+            editingTaskKey = b.dataset.edit;
+            mTaskName.value = editingTaskKey;
+            mTaskScore.value = t[editingTaskKey];
+            addTaskBtn.textContent = '更新任務';
+            addTaskBtn.dataset.mode = 'edit';
+            mTaskName.focus();
+          });
+        });
+        tbodyTasks.querySelectorAll('button[data-del]').forEach(b=>{
+          b.addEventListener('click',()=>{
+            if(!isAdmin()){ alert('請先登入管理者'); return; }
+            const key=b.dataset.del;
+            const t=read(TASKS_KEY, DEFAULT_TASKS);
+            delete t[key]; write(TASKS_KEY, t);
+            if(editingTaskKey===key) resetTaskEditState();
+            rebuildTaskUI(); rebuildTargetsTable(); updateAutoScore(); currentPage=1; render();
+          });
+        });
+      }
+    }
+
+    // 員工 UI
+    function rebuildEmpUI(){
+      const emps = read(EMP_KEY, DEFAULT_EMPS);
+      empList.innerHTML = emps.map(n=>`<option value="${n}">`).join('');
+      if(tbodyEmp){
+        tbodyEmp.innerHTML = emps.map(n=>`
+          <tr>
+            <td>${n}</td>
+            <td class="actions">
+              <button class="btn-delete btn-s" data-del-emp="${n}" data-admin-action>刪除</button>
+            </td>
+          </tr>`).join('');
+        tbodyEmp.querySelectorAll('button[data-del-emp]').forEach(b=>{
+          b.addEventListener('click',()=>{
+            if(!isAdmin()){ alert('請先登入管理者'); return; }
+            let list=read(EMP_KEY, DEFAULT_EMPS);
+            list=list.filter(x=>x!==b.dataset.delEmp);
+            write(EMP_KEY, list);
+            rebuildEmpUI();
+          });
+        });
+      }
+    }
+
+    // 任務新增/更新
+    if(addTaskBtn){
+      addTaskBtn.addEventListener('click', ()=>{
+        if(!isAdmin()){ alert('請先登入管理者'); return; }
+        const name = (mTaskName.value||'').trim();
+        const score = Number(mTaskScore.value);
+        if(!name || !Number.isFinite(score) || score<0){ alert('請輸入有效的任務名稱與分數'); return; }
+        const t = read(TASKS_KEY, DEFAULT_TASKS) || {};
+        if(addTaskBtn.dataset.mode==='edit' && editingTaskKey){
+          if(editingTaskKey!==name && Object.hasOwn(t, editingTaskKey)) delete t[editingTaskKey];
+          t[name] = Math.round(score);
+          write(TASKS_KEY, t);
+          resetTaskEditState();
+        }else{
+          t[name] = Math.round(score);
+          write(TASKS_KEY, t);
+        }
+        rebuildTaskUI(); rebuildTargetsTable(); updateAutoScore(); currentPage=1; render();
+      });
+    }
+
+    // 恢復預設
+    if(resetDefaultsBtn){
+      resetDefaultsBtn.addEventListener('click', ()=>{
+        if(!isAdmin()){ alert('請先登入管理者'); return; }
+        if(confirm('確定恢復為預設任務？')){ write(TASKS_KEY, DEFAULT_TASKS); resetTaskEditState(); rebuildTaskUI(); rebuildTargetsTable(); updateAutoScore(); currentPage=1; render(); }
+      });
+    }
+
+    // 員工新增/清空
+    if(addEmpBtn){
+      addEmpBtn.addEventListener('click', ()=>{
+        if(!isAdmin()){ alert('請先登入管理者'); return; }
+        const n=(mEmpName.value||'').trim();
+        if(!n){ alert('請輸入員工姓名'); return; }
+        const set=new Set(read(EMP_KEY, DEFAULT_EMPS)); set.add(n);
+        write(EMP_KEY, Array.from(set)); mEmpName.value=''; rebuildEmpUI();
+      });
+    }
+    if(clearEmpBtn){
+      clearEmpBtn.addEventListener('click', ()=>{
+        if(!isAdmin()){ alert('請先登入管理者'); return; }
+        if(confirm('確定清空名單？')){ write(EMP_KEY, []); rebuildEmpUI(); }
+      });
+    }
+
+    // 設定變更
+    monthEl.addEventListener('change', ()=>{ pillMonth.textContent = monthEl.value; currentPage=1; render(); });
+    filterNameEl.addEventListener('input', ()=>{ currentPage=1; render(); });
+    thresholdEl.addEventListener('input', ()=>{
+      if(!isAdmin()){ thresholdEl.value = read(THRESHOLD_KEY, 80); alert('請先登入管理者'); return; }
+      write(THRESHOLD_KEY, Number(thresholdEl.value||0)); render();
+    });
+    onlyUnderEl.addEventListener('change', render);
+
+    // ===== 新增紀錄（單號唯一；進度允許任意選擇） =====
+    form.addEventListener('submit', (e)=>{
+      e.preventDefault();
+
+      const orderNo = orderNoEl.value.trim();
+      if(!orderNo){ alert('請輸入單號'); return; }
+
+      // 阻擋重複單號
+      const exists = load().some(r=> (r.orderNo || '').trim() === orderNo);
+      if(exists){
+        alert('此單號已存在，請用「編輯」更新，禁止重複填寫。');
+        return;
+      }
+
+      const pickedStage = (stageEl.value || 'NOT_STARTED');
+
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      const scorePerItem = tasks[taskEl.value] || 0;
+      const qty = Number(qtyEl.value);
+      const total = scorePerItem * qty;
+
+      const rec = {
+        id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()),
+        orderNo,
+        date: dateEl.value,
+        name: nameEl.value.trim(),
+        task: taskEl.value,
+        qty, scorePerItem, total,
+        note: (noteEl.value||'').trim(),
+        stage: pickedStage,
+        stagePct: (STAGE[pickedStage]?.pct ?? 0)
+      };
+      const list = load(); list.push(rec); save(list);
+
+      // 名單帶入
+      const set=new Set(read(EMP_KEY, DEFAULT_EMPS)); set.add(rec.name); write(EMP_KEY, Array.from(set)); rebuildEmpUI();
+
+      form.reset(); dateEl.valueAsDate = new Date(); autoScoreEl.value=''; stageEl.value='NOT_STARTED';
+      currentPage=1; render(); alert('已儲存');
+    });
+
+    // 刪除紀錄
+    function removeOne(id){
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      save(load().filter(r=>r.id!==id));
+      // 若刪到最後一頁只剩空，往前移一頁
+      currentPage = Math.min(currentPage, getTotalPages(applyFilters(load())) || 1);
+      render();
+    }
+
+    // 匯出 CSV / 清空
+    document.getElementById('exportCsv').addEventListener('click', ()=>{
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      const list = load();
+      const header = ['單號','日期','姓名','任務','件數','單件分','總分','進度','進度%','備註'];
+      const rows = list.map(r=>[
+        r.orderNo,r.date,r.name,r.task,r.qty,r.scorePerItem,r.total,
+        STAGE[r.stage]?.label || '', STAGE[r.stage]?.pct ?? '',
+        (r.note||'').replace(/\n/g,' ')
+      ]);
+      const csv = [header,...rows].map(a=>a.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='KPI_Export.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('clearAll').addEventListener('click', ()=>{
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      if(confirm('確定清除所有資料？此動作無法復原')){
+        localStorage.removeItem(KEY);
+        currentPage=1; render();
+      }
+    });
+
+    // 圖表
+    let chartByPerson, chartByTask;
+    function drawCharts(list){
+      const byPerson={}, byTask={};
+      list.forEach(r=>{ byPerson[r.name]=(byPerson[r.name]||0)+r.total; byTask[r.task]=(byTask[r.task]||0)+r.total; });
+      const ctx1=document.getElementById('chartByPerson');
+      const ctx2=document.getElementById('chartByTask');
+      if(chartByPerson) chartByPerson.destroy();
+      if(chartByTask) chartByTask.destroy();
+      chartByPerson = new Chart(ctx1,{type:'bar',data:{labels:Object.keys(byPerson),datasets:[{label:'總分',data:Object.values(byPerson)}]},options:{responsive:true,scales:{y:{beginAtZero:true}},plugins:{legend:{display:false},title:{display:true,text:'各人總分'}}}});
+      chartByTask = new Chart(ctx2,{type:'pie',data:{labels:Object.keys(byTask),datasets:[{data:Object.values(byTask)}]},options:{responsive:true,plugins:{title:{display:true,text:'任務分數分布'}}}});
+    }
+
+    // 目標
+    const loadTargets = () => read(TARGETS_KEY, {}) || {};
+    const saveTargets = (obj) => write(TARGETS_KEY, obj);
+    function rebuildTargetsTable(){
+      const targets = loadTargets();
+      const rows = Object.entries(targets);
+      if(!tbodyTargets) return;
+      tbodyTargets.innerHTML = rows.length
+        ? rows.map(([n, obj])=>`
+          <tr>
+            <td>${n}</td>
+            <td>${obj.points ?? ''}</td>
+            <td style="text-align:left">${(obj.note||'').replace(/</g,'&lt;')}</td>
+            <td class="actions">
+              <button class="btn-edit btn-s" data-fill="${n}">帶入</button>
+              <button class="btn-delete btn-s" data-del="${n}" data-admin-action>刪除</button>
+            </td>
+          </tr>`).join('')
+        : `<tr><td colspan="4" class="tiny">尚未設定任何目標；未設定者的目標% 會視為 100%。</td></tr>`;
+      tbodyTargets.querySelectorAll('button[data-fill]').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          const n=b.dataset.fill;
+          const t = loadTargets()[n] || {};
+          tName.value = n;
+          tPoints.value = t.points ?? '';
+          tNote.value = t.note || '';
+          tName.focus();
+        });
+      });
+      tbodyTargets.querySelectorAll('button[data-del]').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          if(!isAdmin()){ alert('請先登入管理者'); return; }
+          const n=b.dataset.del;
+          const all = loadTargets();
+          if(all[n] && confirm(`刪除 ${n} 的目標設定？`)){
+            delete all[n];
+            saveTargets(all);
+            rebuildTargetsTable();
+            render();
+          }
+        });
+      });
+    }
+
+    // KPI 標籤
+    function statusTag(score, th){
+      if(score >= th*1.333) return '<span class="tag ok">優秀</span>';
+      if(score >= th) return '<span class="tag warn">達標</span>';
+      return '<span class="tag bad">未達標</span>';
+    }
+
+    // 編輯紀錄（允許任意切換）
+    function openEditModal(rec){
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      editId.value = rec.id;
+      editOrderNo.value = rec.orderNo || '';
+      editDate.value = rec.date || '';
+      editName.value = rec.name || '';
+      editTask.value = rec.task || '';
+      editQty.value = rec.qty || 1;
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      const spi = Number.isFinite(tasks[rec.task]) ? tasks[rec.task] : (rec.scorePerItem||0);
+      editScorePerItem.value = spi;
+      editNote.value = rec.note || '';
+      editStage.value = rec.stage || 'NOT_STARTED';
+      editModal.classList.remove('hidden'); editModal.setAttribute('aria-hidden','false');
+    }
+    function closeEditModal(){ editModal.classList.add('hidden'); editModal.setAttribute('aria-hidden','true'); }
+    document.getElementById('edit-task').addEventListener('change', ()=>{
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      editScorePerItem.value = tasks[document.getElementById('edit-task').value] || 0;
+    });
+    editCancel.addEventListener('click', closeEditModal);
+    editModal.addEventListener('click', (e)=>{ if(e.target===editModal) closeEditModal(); });
+    editForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      const id = editId.value;
+      let list = load();
+      const idx = list.findIndex(r=>r.id===id);
+      if(idx<0){ alert('找不到該筆紀錄'); closeEditModal(); return; }
+
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      const newTask = document.getElementById('edit-task').value;
+      const newQty = Number(editQty.value)||0;
+      const newScorePerItem = Number.isFinite(tasks[newTask]) ? tasks[newTask] : (list[idx].scorePerItem||0);
+      const newTotal = newScorePerItem * newQty;
+
+      // 單號唯一：若修改單號，需確認沒有重複
+      const newOrder = (editOrderNo.value||'').trim();
+      if(newOrder !== list[idx].orderNo){
+        const dup = list.some((r,i)=> i!==idx && (r.orderNo||'').trim()===newOrder);
+        if(dup){ alert('此單號已存在，請使用其他單號'); return; }
+      }
+
+      const newStageKey = editStage.value || 'NOT_STARTED';
+
+      list[idx] = {
+        ...list[idx],
+        orderNo: newOrder,
+        date: editDate.value,
+        name: (editName.value||'').trim(),
+        task: newTask,
+        qty: newQty,
+        scorePerItem: newScorePerItem,
+        total: newTotal,
+        note: (editNote.value||'').trim(),
+        stage: newStageKey,
+        stagePct: STAGE[newStageKey]?.pct ?? 0
+      };
+      save(list);
+
+      const set=new Set(read(EMP_KEY, DEFAULT_EMPS)); set.add(list[idx].name); write(EMP_KEY, Array.from(set)); rebuildEmpUI();
+      closeEditModal();
+      render();
+      alert('已更新');
+    });
+
+    // ===== 篩選器：回傳依月份/姓名過濾後的新陣列 =====
+    function applyFilters(list){
+      let out = list.slice();
+      const ym = monthEl.value;
+      if(ym){ out = out.filter(r=> (r.date||'').startsWith(ym)); }
+      const kw = (filterNameEl.value||'').trim();
+      if(kw){ out = out.filter(r=> r.name.includes(kw)); }
+      return out;
+    }
+
+    // ===== 分頁工具 =====
+    function getTotalPages(list){ return Math.max(1, Math.ceil(list.length / PAGE_SIZE)); }
+    function updatePager(totalPages){
+      pageInfoEl.textContent = `第 ${totalPages ? currentPage : 1} / ${totalPages} 頁`;
+      prevPageBtn.disabled = (currentPage <= 1);
+      nextPageBtn.disabled = (currentPage >= totalPages);
+    }
+    prevPageBtn.addEventListener('click', ()=>{
+      if(currentPage > 1){ currentPage--; render(); }
+    });
+    nextPageBtn.addEventListener('click', ()=>{
+      const totalPages = getTotalPages(applyFilters(load()));
+      if(currentPage < totalPages){ currentPage++; render(); }
+    });
+
+    // 渲染
+    function render(){
+      const admin = isAdmin();
+      let list = load();
+
+      // 兼容舊資料：若沒有 stage 欄位，補上 NOT_STARTED
+      let patched = false;
+      list.forEach(r=>{
+        if(!r.stage){ r.stage = 'NOT_STARTED'; r.stagePct = 0; patched = true; }
+      });
+      if(patched) save(list);
+
+      // 應用篩選後再做分頁
+      const filtered = applyFilters(list);
+      const totalPages = getTotalPages(filtered);
+      currentPage = Math.min(Math.max(1, currentPage), totalPages);
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = start + PAGE_SIZE;
+      const pageList = filtered.slice(start, end);
+
+      // ===== 明細表格（僅渲染當頁 20 筆） =====
+      tbody.innerHTML = pageList.map(r=>{
+        const stageKey = r.stage || 'NOT_STARTED';
+        const stageText = (STAGE[stageKey]?.label || '');
+        const stagePct = (STAGE[stageKey]?.pct ?? 0);
+        return `
+        <tr data-stage="${stageKey}">
+          <td>${r.orderNo||''}</td>
+          <td>${r.date||''}</td>
+          <td>${r.name||''}</td>
+          <td>${r.task||''}</td>
+          <td>${r.qty||''}</td>
+          <td>${r.scorePerItem||''}</td>
+          <td>${r.total||''}</td>
+          <td>${stageText}（${stagePct}%）</td>
+          <td>${(r.note||'').replace(/</g,'&lt;')}</td>
+          ${admin ? `<td class="actions">
+                       <button class="btn-edit btn-s" data-edit-id="${r.id}" data-admin-action>編輯</button>
+                       <button class="btn-delete btn-s" data-id="${r.id}" data-admin-action>刪除</button>
+                     </td>` : ``}
+        </tr>`;
+      }).join('') || `<tr><td colspan="${admin?10:9}" class="tiny">本月尚無資料</td></tr>`;
+
+      // 綁定當頁按鈕
+      if (admin){
+        tbody.querySelectorAll('button[data-id]').forEach(btn=> btn.addEventListener('click', ()=> removeOne(btn.dataset.id)));
+        tbody.querySelectorAll('button[data-edit-id]').forEach(btn=> btn.addEventListener('click', ()=>{
+          const id = btn.dataset.editId;
+          const rec = load().find(x=>x.id===id);
+          if(rec) openEditModal(rec);
+        }));
+      }
+
+      // 當頁合計
+      const totals = pageList.reduce((acc, r) => {
+        acc.qty += Number(r.qty)||0;
+        acc.score += Number(r.total)||0;
+        return acc;
+      }, {qty:0, score:0});
+      if(pageList.length){
+        tfoot.innerHTML = admin
+          ? `<tr>
+               <td colspan="4" style="text-align:right;">當頁合計</td>
+               <td>${totals.qty}</td>
+               <td></td>
+               <td>${totals.score}</td>
+               <td></td>
+               <td></td>
+               <td></td>
+             </tr>`
+          : `<tr>
+               <td colspan="4" style="text-align:right;">當頁合計</td>
+               <td>${totals.qty}</td>
+               <td></td>
+               <td>${totals.score}</td>
+               <td></td>
+               <td></td>
+             </tr>`;
+      }else{
+        tfoot.innerHTML = '';
+      }
+
+      // 分頁資訊
+      updatePager(totalPages);
+
+      // 圖表（仍採用「篩選後的全部資料」，非僅當頁）
+      drawCharts(filtered);
+
+      // ===== 每月總表（正規化、達標分類） — 仍用篩選後全部資料 =====
+      const tasks = read(TASKS_KEY, DEFAULT_TASKS);
+      const sumTask = Object.values(tasks).reduce((a,b)=>a+b,0);
+
+      const normSumByName = {};
+      if(sumTask > 0){
+        filtered.forEach(r=>{
+          const unitNorm = (r.scorePerItem || 0) / sumTask * 100;
+          const add = unitNorm * (Number(r.qty)||0);
+          normSumByName[r.name] = (normSumByName[r.name]||0) + add;
+        });
+      }else{
+        filtered.forEach(r=>{ normSumByName[r.name] = 0; });
+      }
+
+      const allNames = new Set(read(EMP_KEY, DEFAULT_EMPS));
+      Object.keys(normSumByName).forEach(n=> allNames.add(n));
+
+      const targets = read(TARGETS_KEY, {}) || {};
+      function personTargetPercent(name){
+        if(sumTask <= 0) return 100;
+        const targetPoints = targets[name]?.points;
+        if(targetPoints == null || !Number.isFinite(targetPoints)) return 100;
+        return Math.max(0, (targetPoints / sumTask) * 100);
+      }
+
+      const th = read(THRESHOLD_KEY, 80);
+
+      let rows = Array.from(allNames).map(n=>{
+        const normTotal = normSumByName[n] || 0;
+        const targetPct = personTargetPercent(n) || 1;
+        const kpiPct = Math.min(100, Math.round(normTotal / targetPct * 100));
+        const tag = statusTag(kpiPct, th);
+        const isUnder = kpiPct < th;
+        return { n, s: kpiPct, tag, isUnder };
+      });
+
+      if (onlyUnderEl.checked) rows = rows.filter(r=> r.isUnder);
+      rows.sort((a,b)=> b.s - a.s);
+      tbodyUnder.innerHTML = rows.length
+        ? rows.map(r=> `<tr><td>${r.n}</td><td>${r.s}%</td><td>${r.tag}</td></tr>`).join('')
+        : `<tr><td colspan="3" class="tiny">${onlyUnderEl.checked ? '當月無未達標人員' : '本月尚無資料'}</td></tr>`;
+    }
+
+    // 目標儲存/刪除
+    document.getElementById('saveTarget')?.addEventListener('click', ()=>{
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      const n = (tName.value||'').trim();
+      const p = Number(tPoints.value);
+      const note = (tNote.value||'').trim();
+      if(!n || !Number.isFinite(p) || p<0){ alert('請填姓名與有效目標分'); return; }
+      const all = read(TARGETS_KEY, {}) || {}; all[n] = { points: Math.round(p), note }; write(TARGETS_KEY, all);
+      rebuildTargetsTable(); render(); alert('已儲存');
+    });
+    document.getElementById('deleteTarget')?.addEventListener('click', ()=>{
+      if(!isAdmin()){ alert('請先登入管理者'); return; }
+      const n = (tName.value||'').trim();
+      if(!n){ alert('請先在上方輸入要刪除之姓名'); return; }
+      const all = read(TARGETS_KEY, {}) || {};
+      if(all[n]){ delete all[n]; write(TARGETS_KEY, all); rebuildTargetsTable(); render(); alert('已刪除'); }
+    });
+
+    function boot(){
+      setRole(getRole());
+      rebuildTaskUI(); rebuildEmpUI(); rebuildTargetsTable();
+      updateAutoScore();
+    }
+    boot();
+  </script>
+</body>
+</html>
